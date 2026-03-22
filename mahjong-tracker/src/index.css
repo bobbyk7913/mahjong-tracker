@@ -1,0 +1,12 @@
+/* 加入呢段嚟強制背景色，防止系統 Dark Mode 亂入 */
+:root {
+  background-color: #f3f4f6; /* gray-100 */
+  color: #1a202c; /* gray-900 */
+}
+
+/* 確保所有文字預設係深色，背景係淺色 */
+body {
+  margin: 0;
+  background-color: #f3f4f6;
+  color: #1a202c;
+}
