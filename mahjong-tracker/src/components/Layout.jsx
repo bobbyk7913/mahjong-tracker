@@ -1,8 +1,7 @@
 // src/components/Layout.jsx
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-// 記得 import埋 Settings icon
-import { LayoutDashboard, PlusCircle, LogOut, Menu, X, BarChart3, Settings, Wand2 } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, LogOut, Menu, X, BarChart3, Wand2 } from 'lucide-react';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 
@@ -15,7 +14,6 @@ const Layout = ({ children, user }) => {
     '/': { title: '戰績報表', icon: <LayoutDashboard size={22} className="text-blue-500" /> },
     '/add': { title: '新增紀錄', icon: <PlusCircle size={22} className="text-green-500" /> },
     '/analytics': { title: '數據分析', icon: <BarChart3 size={22} className="text-indigo-500" /> },
-    '/settings': { title: '個人設定', icon: <Settings size={22} className="text-gray-500" /> },
     //'/tools': { title: '管理工具', icon: <Wand2 size={22} className="text-amber-500" /> },
   };
 

@@ -1,152 +1,190 @@
 // src/components/Auth.jsx
 import React, { useState } from 'react';
-import { auth } from '../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { Loader2, Mail, Lock, KeyRound } from 'lucide-react';
+import { auth, db, googleProvider } from '../firebase';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Loader2, KeyRound, LogOut, ShieldCheck, UserCircle2 } from 'lucide-react';
 import StatusModal from './StatusModal';
 
-const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const MASTER_INVITE_CODE = 'MJ191919';
+
+const Auth = ({ user, onApproved }) => {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // --- 你可以在這裡修改 Hardcode 的邀請碼 ---
-  const MASTER_INVITE_CODE = "MJ191919"; 
-
   const [modal, setModal] = useState({ isOpen: false, type: 'success', title: '', message: '' });
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
     setLoading(true);
-
-    setModal({
-      isOpen: true,
-      type: 'loading',
-      title: isLogin ? '登入中' : '註冊中',
-      message: '請稍候，正在驗證您的資訊...'
-    });
+    setModal({ isOpen: true, type: 'loading', title: '驗證中', message: '正在同步 Google 帳號...' });
 
     try {
-      if (isLogin) {
-        // --- 登入邏輯 ---
-        await signInWithEmailAndPassword(auth, email, password);
-        setModal({ isOpen: false, type: 'success', title: '', message: '' });
-      } else {
-        // --- 註冊邏輯 (Hardcode 驗證) ---
-        if (inviteCode !== MASTER_INVITE_CODE) {
-          setModal({
-            isOpen: true,
-            type: 'error',
-            title: '邀請碼錯誤',
-            message: '暗號不正確，請聯絡管理員獲取正確邀請碼！'
-          });
-          setLoading(false);
-          return;
-        }
-
-        await createUserWithEmailAndPassword(auth, email, password);
+      await signInWithPopup(auth, googleProvider);
+      setModal({ isOpen: false });
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      if (error.code !== 'auth/popup-closed-by-user') {
         setModal({
           isOpen: true,
-          type: 'success',
-          title: '註冊成功',
-          message: '歡迎加入！現在可以登入開始紀錄戰績。'
+          type: 'error',
+          title: '登入失敗',
+          message: '無法完成 Google 驗證，請確保網域已授權且網絡正常。'
         });
-        // 註冊成功後自動切換回登入模式
-        setIsLogin(true);
       }
-    } catch (error) {
-      console.error(error);
-      let errorMsg = "發生錯誤，請稍後再試。";
-      if (error.code === 'auth/email-already-in-use') errorMsg = "呢個 Email 已經比人註冊咗喇。";
-      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') errorMsg = "Email 或密碼不正確。";
-      
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInviteSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!user) {
       setModal({
         isOpen: true,
         type: 'error',
-        title: isLogin ? '登入失敗' : '註冊失敗',
-        message: errorMsg
+        title: '未登入',
+        message: '請先用 Google 登入後再輸入邀請碼。'
+      });
+      return;
+    }
+
+    setLoading(true);
+    setModal({ isOpen: true, type: 'loading', title: '驗證中', message: '正在檢查邀請碼...' });
+
+    try {
+      if (inviteCode.trim() !== MASTER_INVITE_CODE) {
+        setModal({
+          isOpen: true,
+          type: 'error',
+          title: '邀請碼錯誤',
+          message: '暗號不正確，請重新輸入。'
+        });
+        return;
+      }
+
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email ?? '',
+        displayName: user.displayName ?? '',
+        status: 'approved',
+        inviteCode: inviteCode.trim(),
+        inviteCodeVerifiedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        lastLoginAt: serverTimestamp()
+      }, { merge: true });
+
+      setModal({
+        isOpen: true,
+        type: 'success',
+        title: '驗證成功',
+        message: '你已成為正式系統用戶，可以使用主系統功能。'
+      });
+      setInviteCode('');
+      setTimeout(() => {
+        onApproved?.();
+      }, 700);
+    } catch (error) {
+      console.error('Invite code approval error:', error);
+      setModal({
+        isOpen: true,
+        type: 'error',
+        title: '驗證失敗',
+        message: '無法完成邀請碼驗證，請稍後再試。'
       });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setInviteCode('');
+      setModal({ isOpen: false, type: 'success', title: '', message: '' });
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
   return (
     <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-500">
-      {/* Header */}
-      <div className="bg-green-600 p-10 text-white text-center relative overflow-hidden">
-        <div className="relative z-10">
-          <div className="text-6xl mb-4 drop-shadow-lg">🀄</div>
-          <h2 className="text-3xl font-black tracking-tighter italic uppercase">雀神紀錄系統</h2>
-          <p className="text-green-100 mt-2 font-bold opacity-90 text-sm">
-            {isLogin ? '今日又要贏幾多？' : '加入我哋，紀錄最強戰績！'}
-          </p>
-        </div>
-        <div className="absolute top-0 right-0 text-9xl opacity-10 font-black -mr-10 -mt-10">MJ</div>
+      <div className="bg-green-600 p-10 text-white text-center">
+        <div className="text-6xl mb-4 drop-shadow-lg">🀄</div>
+        <h2 className="text-3xl font-black tracking-tighter italic uppercase">雀神紀錄系統</h2>
+        <p className="text-green-100 mt-2 font-bold opacity-90 text-sm">
+          {user ? '請輸入邀請碼以解鎖主系統' : '今日又要贏幾多？'}
+        </p>
       </div>
 
       <div className="p-8 md:p-10">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl focus-within:ring-2 ring-green-500 transition-all border border-transparent focus-within:bg-white">
-            <Mail className="text-gray-400" size={18} />
-            <input 
-              type="email" required placeholder="Email 地址" 
-              className="w-full bg-transparent outline-none font-medium"
-              onChange={(e) => setEmail(e.target.value)} 
-            />
-          </div>
+        {!user ? (
+          <div className="space-y-4">
+            <div className="rounded-[2rem] bg-gray-50 p-5 border border-gray-100 flex items-start gap-4">
+              <ShieldCheck className="text-green-600 shrink-0 mt-0.5" size={24} />
+              <div>
+                <p className="font-black text-gray-800 mb-1">只支援 Google 登入</p>
+                <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                  登入後系統會檢查你係咪正式用戶。未批准帳號會留喺邀請碼頁面。
+                </p>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl focus-within:ring-2 ring-green-500 transition-all border border-transparent focus-within:bg-white">
-            <Lock className="text-gray-400" size={18} />
-            <input 
-              type="password" required placeholder="密碼" 
-              className="w-full bg-transparent outline-none font-medium"
-              onChange={(e) => setPassword(e.target.value)} 
-            />
+            <button
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full py-4 bg-white border-2 border-gray-50 text-gray-700 rounded-2xl font-black text-sm flex items-center justify-center gap-3 hover:bg-gray-50 transition-all active:scale-[0.98] shadow-sm disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" /> : <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />}
+              使用 Google 帳號登入
+            </button>
           </div>
+        ) : (
+          <form onSubmit={handleInviteSubmit} className="space-y-5">
+            <div className="rounded-[2rem] bg-gray-50 p-5 border border-gray-100 flex items-center gap-4">
+              <UserCircle2 className="text-gray-500 shrink-0" size={28} />
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">目前登入帳號</p>
+                <p className="font-black text-gray-800 truncate">{user.displayName || user.email || 'Google 帳號'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-500 text-xs font-black hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <LogOut size={14} />
+                登出
+              </button>
+            </div>
 
-          {!isLogin && (
-            <div className="pt-2 animate-in slide-in-from-top-2 duration-300">
-              <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 ml-1">🔒 內部邀請碼</p>
-              <div className="flex items-center gap-3 bg-amber-50 p-4 rounded-2xl focus-within:ring-2 ring-amber-500 transition-all border border-amber-100">
+            <div>
+              <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 ml-1">
+                🔒 內部授權暗號
+              </p>
+              <div className="flex items-center gap-3 bg-amber-50 p-4 rounded-2xl focus-within:ring-2 ring-amber-500 border border-amber-100 transition-all">
                 <KeyRound className="text-amber-500" size={18} />
-                <input 
-                  type="text" required placeholder="輸入暗號" 
-                  className="w-full bg-transparent outline-none font-bold text-amber-700 placeholder:text-amber-300"
-                  onChange={(e) => setInviteCode(e.target.value)} 
+                <input
+                  type="text"
+                  placeholder="輸入邀請碼"
+                  className="w-full bg-transparent outline-none font-bold text-amber-700 text-sm placeholder:text-amber-300"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
                 />
               </div>
             </div>
-          )}
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full py-5 bg-gray-900 text-white rounded-2xl font-black text-lg hover:bg-black transition-all transform active:scale-95 shadow-xl flex items-center justify-center gap-3 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="animate-spin" /> : (isLogin ? '登入系統' : '立即註冊')}
-          </button>
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-          <p className="text-gray-400 font-bold text-sm">
-            {isLogin ? '仲未有帳號？' : '已經有帳號？'}
-            <button 
-              onClick={() => setIsLogin(!isLogin)}
-              className="ml-2 text-green-600 font-black hover:underline"
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-lg hover:bg-black transition-all active:scale-95 shadow-lg flex items-center justify-center gap-3 disabled:opacity-50"
             >
-              {isLogin ? '立即註冊' : '返去登入'}
+              {loading ? <Loader2 className="animate-spin" /> : '驗證並解鎖主系統'}
             </button>
-          </p>
-        </div>
+          </form>
+        )}
       </div>
 
-      <StatusModal 
-        {...modal} 
-        onClose={() => setModal({ ...modal, isOpen: false })} 
-      />
+      <StatusModal {...modal} onClose={() => setModal({ ...modal, isOpen: false })} />
     </div>
   );
 };
