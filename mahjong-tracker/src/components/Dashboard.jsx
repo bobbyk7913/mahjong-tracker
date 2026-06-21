@@ -8,12 +8,38 @@ import StatusModal from './StatusModal';
 const Dashboard = ({ userId }) => {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [retrySeed, setRetrySeed] = useState(0);
   const [selectedYear, setSelectedYear] = useState('ALL'); 
   const [modal, setModal] = useState({ 
     isOpen: false, type: 'loading', title: '', message: '', onConfirm: null 
   });
 
+  // 💡 核心修正 1：檢查是否是剛驗證完過來的新用戶，如果是就彈出成功 Modal
   useEffect(() => {
+    const shouldShowWelcome = localStorage.getItem('show_approved_welcome');
+    if (shouldShowWelcome === 'true') {
+      // 移除標記，確保下一次手動重新整理網頁時唔會再重複彈出
+      localStorage.removeItem('show_approved_welcome');
+      
+      // 彈出成功 Modal
+      setModal({
+        isOpen: true,
+        type: 'success',
+        title: '驗證成功',
+        message: '歡迎加入！你已成為正式系統用戶，雀神主系統已成功解鎖。',
+        onConfirm: () => {
+          setModal({ isOpen: false, type: 'loading', title: '', message: '', onConfirm: null });
+        }
+      });
+    }
+  }, []); // 只在 Dashboard 第一次掛載時跑一次
+
+  // 💡 核心修正：將 userId 放入 Dependency Array 確保權限同步時自動重連
+  useEffect(() => {
+    if (!userId) return undefined;
+
+    setLoading(true); // 每次重連前拉起載入狀態
+
     const q = query(
       collection(db, "games"),
       orderBy("date", "desc"),
@@ -28,12 +54,19 @@ const Dashboard = ({ userId }) => {
       setGames(gamesData);
       setLoading(false);
     }, (error) => {
-      console.error("Firestore Error:", error);
-      setLoading(false);
+      console.error("Dashboard Firestore Error:", error);
+
+      // 首次登入時如果 auth / permissions 仲喺同步中，短暫延遲後重試一次。
+      // 重新整理後正常，通常就係呢個時序問題。
+      const retryTimer = setTimeout(() => {
+        setRetrySeed((current) => current + 1);
+      }, 700);
+
+      return () => clearTimeout(retryTimer);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [userId, retrySeed]); // 👈 這裡非常重要！絕對不能是空陣列 []
 
   // 1. 提取所有年份
   const availableYears = useMemo(() => {
@@ -47,7 +80,7 @@ const Dashboard = ({ userId }) => {
     return Array.from(years).sort((a, b) => b - a);
   }, [games]);
 
-  // 2. 💡 根據年份篩選戰報清單 (同步作用於榜單與列表)
+  // 2. 根據年份篩選戰報清單 (同步作用於榜單與列表)
   const filteredGames = useMemo(() => {
     if (selectedYear === 'ALL') return games;
     return games.filter(g => g.date && g.date.startsWith(selectedYear));

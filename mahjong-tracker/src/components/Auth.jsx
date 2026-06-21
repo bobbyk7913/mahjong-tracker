@@ -62,6 +62,10 @@ const Auth = ({ user, onApproved }) => {
         return;
       }
 
+      // 💡 在自動跳轉前，埋下一個本地標記，通知 Dashboard 稍後彈窗
+      localStorage.setItem('show_approved_welcome', 'true');
+
+      // 1. 先寫入 Firestore 資料庫更新為 approved 狀態
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, {
         uid: user.uid,
@@ -74,16 +78,15 @@ const Auth = ({ user, onApproved }) => {
         lastLoginAt: serverTimestamp()
       }, { merge: true });
 
-      setModal({
-        isOpen: true,
-        type: 'success',
-        title: '驗證成功',
-        message: '你已成為正式系統用戶，可以使用主系統功能。'
-      });
+      // 2. 強制刷新當前用戶的 Auth Token，確保帶上最新權限
+      if (auth.currentUser) {
+        await auth.currentUser.getIdToken(true);
+      }
+
+      // 清空輸入框
       setInviteCode('');
-      setTimeout(() => {
-        onApproved?.();
-      }, 700);
+      setModal({ isOpen: false });
+      
     } catch (error) {
       console.error('Invite code approval error:', error);
       setModal({
@@ -143,14 +146,14 @@ const Auth = ({ user, onApproved }) => {
           <form onSubmit={handleInviteSubmit} className="space-y-5">
             <div className="rounded-[2rem] bg-gray-50 p-5 border border-gray-100 flex items-center gap-4">
               <UserCircle2 className="text-gray-500 shrink-0" size={28} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">目前登入帳號</p>
                 <p className="font-black text-gray-800 truncate">{user.displayName || user.email || 'Google 帳號'}</p>
               </div>
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-500 text-xs font-black hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-500 text-xs font-black hover:text-gray-700 hover:bg-gray-50 transition-colors shrink-0"
               >
                 <LogOut size={14} />
                 登出
