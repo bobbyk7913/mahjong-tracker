@@ -1,14 +1,12 @@
 // src/components/Auth.jsx
 import React, { useState } from 'react';
-import { auth, db, googleProvider } from '../firebase';
-import { signInWithPopup, signOut } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Loader2, KeyRound, LogOut, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { MASTER_INVITE_CODE, LOCAL_STORAGE_KEYS } from '../constants';
+import { signInWithGoogle, signOutUser, refreshCurrentUserToken } from '../services/authService';
+import { approveUser } from '../services/usersService';
 import StatusModal from './StatusModal';
 
-const MASTER_INVITE_CODE = 'MJ191919';
-
-const Auth = ({ user, onApproved }) => {
+const Auth = ({ user }) => {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: 'success', title: '', message: '' });
@@ -18,7 +16,7 @@ const Auth = ({ user, onApproved }) => {
     setModal({ isOpen: true, type: 'loading', title: '驗證中', message: '正在同步 Google 帳號...' });
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithGoogle();
       setModal({ isOpen: false });
     } catch (error) {
       console.error("Google Auth Error:", error);
@@ -63,25 +61,13 @@ const Auth = ({ user, onApproved }) => {
       }
 
       // 💡 在自動跳轉前，埋下一個本地標記，通知 Dashboard 稍後彈窗
-      localStorage.setItem('show_approved_welcome', 'true');
+      localStorage.setItem(LOCAL_STORAGE_KEYS.SHOW_APPROVED_WELCOME, 'true');
 
-      // 1. 先寫入 Firestore 資料庫更新為 approved 狀態
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        uid: user.uid,
-        email: user.email ?? '',
-        displayName: user.displayName ?? '',
-        status: 'approved',
-        inviteCode: inviteCode.trim(),
-        inviteCodeVerifiedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp()
-      }, { merge: true });
+      // 1. 先寫入 Firestore 資料庫更新為 approved 狀態（由 usersService 封裝）
+      await approveUser(user, inviteCode.trim());
 
       // 2. 強制刷新當前用戶的 Auth Token，確保帶上最新權限
-      if (auth.currentUser) {
-        await auth.currentUser.getIdToken(true);
-      }
+      await refreshCurrentUserToken();
 
       // 清空輸入框
       setInviteCode('');
@@ -102,7 +88,7 @@ const Auth = ({ user, onApproved }) => {
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      await signOutUser();
       setInviteCode('');
       setModal({ isOpen: false, type: 'success', title: '', message: '' });
     } catch (error) {

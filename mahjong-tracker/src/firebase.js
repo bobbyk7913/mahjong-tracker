@@ -20,7 +20,8 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// 初始化 Analytics（無需 export，SDK 會自動上報）
+getAnalytics(app);
 
 // export Auth and Firestore for other Component
 export const auth = getAuth(app);

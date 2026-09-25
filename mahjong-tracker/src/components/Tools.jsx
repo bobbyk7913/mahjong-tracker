@@ -1,25 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, query, getDocs, writeBatch, doc, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import React, { useState, useMemo } from 'react';
 import { Wand2, Users, MapPin, AlertTriangle, FileUp, Database, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { getAllGamesQuery, batchRename } from '../services/gamesService';
+import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
 import StatusModal from './StatusModal';
 
-const Tools = ({ userId }) => {
-  const [games, setGames] = useState([]);
+const Tools = () => {
   const [modal, setModal] = useState({ isOpen: false, type: 'loading', title: '', message: '' });
-  const [loadingData, setLoadingData] = useState(true);
 
   // 1. 實時監聽所有戰績，用嚟整 Dropdown List
-  useEffect(() => {
-    const q = query(collection(db, "games"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => doc.data());
-      setGames(data);
-      setLoadingData(false);
-    });
-    return () => unsubscribe();
-  }, []);
+  const { data: games } = useFirestoreSubscription(getAllGamesQuery, {
+    mapSnapshot: (snapshot) => snapshot.docs.map((d) => d.data()),
+  });
 
   // 2. 💡 提取所有不重複的玩家名同地點名
   const { allPlayers, allLocations } = useMemo(() => {
@@ -38,7 +30,7 @@ const Tools = ({ userId }) => {
   }, [games]);
 
   // --- 原有的 Excel 匯入邏輯 (省略部分代碼以保持簡潔) ---
-  const handleExcelImport = async (evt) => { /* ...保持不變... */ };
+  const handleExcelImport = async () => { /* ...保持不變... */ };
 
   // --- 3. 修改後的批量更新邏輯 ---
   const [targetNames, setTargetNames] = useState({ oldPlayer: '', newPlayer: '', oldLoc: '', newLoc: '' });
@@ -55,33 +47,15 @@ const Tools = ({ userId }) => {
     setModal({ isOpen: true, type: 'loading', title: '處理中', message: '正在更新全體紀錄...' });
 
     try {
-      const q = query(collection(db, "games"));
-      const querySnapshot = await getDocs(q);
-      const batch = writeBatch(db);
-      let count = 0;
-
-      querySnapshot.forEach((gameDoc) => {
-        const data = gameDoc.data();
-        let hasChanged = false;
-        const gameRef = doc(db, "games", gameDoc.id);
-
-        if (type === 'PLAYER') {
-          const updatedPlayers = data.players.map(p => {
-            if (p.name === oldVal) { hasChanged = true; return { ...p, name: newVal }; }
-            return p;
-          });
-          if (hasChanged) { batch.update(gameRef, { players: updatedPlayers }); count++; }
-        } else {
-          if (data.location === oldVal) { batch.update(gameRef, { location: newVal }); count++; }
-        }
-      });
+      const count = await batchRename({ type, oldValue: oldVal, newValue: newVal });
 
       if (count > 0) {
-        await batch.commit();
         setModal({ isOpen: true, type: 'success', title: '更新完成', message: `已成功修改 ${count} 條紀錄！` });
         setTargetNames({ ...targetNames, [type === 'PLAYER' ? 'newPlayer' : 'newLoc']: '' });
+      } else {
+        setModal({ isOpen: true, type: 'error', title: '無變更', message: '搵唔到需要更新嘅紀錄。' });
       }
-    } catch (e) {
+    } catch {
       setModal({ isOpen: true, type: 'error', title: '失敗', message: '更新失敗' });
     }
   };

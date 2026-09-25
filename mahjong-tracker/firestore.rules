@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function isApprovedUser() {
+      return signedIn()
+        && exists(userDocPath())
+        && get(userDocPath()).data.status == 'approved';
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+
+      // 允許用戶用正確邀請碼建立/更新成 approved 狀態
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.status == 'approved'
+        && request.resource.data.inviteCode == 'MJ191919';
+
+      allow delete: if false;
+    }
+
+    match /games/{gameId} {
+      allow read, create, update, delete: if isApprovedUser();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

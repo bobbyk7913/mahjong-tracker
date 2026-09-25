@@ -1,14 +1,22 @@
 // src/components/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { History, TrendingUp, TrendingDown, Calendar, MapPin, Trophy, Trash2, Loader2 } from 'lucide-react';
+import { getGamesQuery, deleteGame } from '../services/gamesService';
+import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
+import { LOCAL_STORAGE_KEYS } from '../constants';
 import StatusModal from './StatusModal';
 
 const Dashboard = ({ userId }) => {
-  const [games, setGames] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [retrySeed, setRetrySeed] = useState(0);
+  // realtime 訂閱由 hook 管理；保留首次批准後 rules 同步 race 嘅一次性重試
+  const { data: games, loading, error: subscriptionError, retry } = useFirestoreSubscription(getGamesQuery, {
+    enabled: Boolean(userId),
+    deps: [userId],
+    retryConfig: {
+      maxAttempts: 1,
+      initialDelayMs: 700,
+      retryableCodes: ['permission-denied', 'unavailable'],
+    },
+  });
   const [selectedYear, setSelectedYear] = useState('ALL'); 
   const [modal, setModal] = useState({ 
     isOpen: false, type: 'loading', title: '', message: '', onConfirm: null 
@@ -16,12 +24,13 @@ const Dashboard = ({ userId }) => {
 
   // 💡 核心修正 1：檢查是否是剛驗證完過來的新用戶，如果是就彈出成功 Modal
   useEffect(() => {
-    const shouldShowWelcome = localStorage.getItem('show_approved_welcome');
+    const shouldShowWelcome = localStorage.getItem(LOCAL_STORAGE_KEYS.SHOW_APPROVED_WELCOME);
     if (shouldShowWelcome === 'true') {
       // 移除標記，確保下一次手動重新整理網頁時唔會再重複彈出
-      localStorage.removeItem('show_approved_welcome');
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.SHOW_APPROVED_WELCOME);
       
-      // 彈出成功 Modal
+      // 彈出成功 Modal（一次過 mount side-effect，符合預期）
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModal({
         isOpen: true,
         type: 'success',
@@ -33,40 +42,6 @@ const Dashboard = ({ userId }) => {
       });
     }
   }, []); // 只在 Dashboard 第一次掛載時跑一次
-
-  // 💡 核心修正：將 userId 放入 Dependency Array 確保權限同步時自動重連
-  useEffect(() => {
-    if (!userId) return undefined;
-
-    setLoading(true); // 每次重連前拉起載入狀態
-
-    const q = query(
-      collection(db, "games"),
-      orderBy("date", "desc"),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const gamesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setGames(gamesData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Dashboard Firestore Error:", error);
-
-      // 首次登入時如果 auth / permissions 仲喺同步中，短暫延遲後重試一次。
-      // 重新整理後正常，通常就係呢個時序問題。
-      const retryTimer = setTimeout(() => {
-        setRetrySeed((current) => current + 1);
-      }, 700);
-
-      return () => clearTimeout(retryTimer);
-    });
-
-    return () => unsubscribe();
-  }, [userId, retrySeed]); // 👈 這裡非常重要！絕對不能是空陣列 []
 
   // 1. 提取所有年份
   const availableYears = useMemo(() => {
@@ -112,9 +87,9 @@ const Dashboard = ({ userId }) => {
   const performDelete = async (gameId) => {
     setModal({ isOpen: true, type: 'loading', title: '處理中', message: '正在抹除紀錄...' });
     try {
-      await deleteDoc(doc(db, "games", gameId));
+      await deleteGame(gameId);
       setModal({ isOpen: true, type: 'success', title: '刪除成功', message: '戰績已移除。' });
-    } catch (error) {
+    } catch {
       setModal({ isOpen: true, type: 'error', title: '失敗', message: '網絡異常。' });
     }
   };
@@ -123,6 +98,19 @@ const Dashboard = ({ userId }) => {
     <div className="flex flex-col justify-center items-center h-64 text-gray-400 gap-3">
       <Loader2 className="animate-spin" size={32} />
       <p className="font-black text-xs uppercase tracking-widest">正在獲取全體戰果...</p>
+    </div>
+  );
+
+  // 永久性錯誤（例如 permission-denied）唔會無限重試；顯示錯誤俾用戶手動重試
+  if (subscriptionError) return (
+    <div className="flex flex-col justify-center items-center h-64 text-gray-400 gap-3">
+      <p className="font-black text-sm text-red-500">無法載入戰績（{subscriptionError.code || 'unknown'}）</p>
+      <button
+        onClick={retry}
+        className="px-5 py-2.5 bg-gray-900 text-white rounded-xl font-black text-xs hover:bg-black transition-all"
+      >
+        重試
+      </button>
     </div>
   );
 

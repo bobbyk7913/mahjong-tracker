@@ -2,10 +2,9 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, PlusCircle, LogOut, Menu, X, BarChart3, Wand2 } from 'lucide-react';
-import { auth } from '../firebase';
-import { signOut } from 'firebase/auth';
+import { signOutUser } from '../services/authService';
 
-const Layout = ({ children, user }) => {
+const Layout = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
@@ -66,7 +65,7 @@ const Layout = ({ children, user }) => {
         </nav>
 
         <div className="absolute bottom-0 w-full p-4 border-t border-gray-800">
-          <button onClick={() => signOut(auth)} className="flex items-center gap-3 text-gray-400 hover:text-red-400 font-bold w-full px-4 py-3 transition-colors">
+          <button onClick={() => signOutUser()} className="flex items-center gap-3 text-gray-400 hover:text-red-400 font-bold w-full px-4 py-3 transition-colors">
             <LogOut size={20} /> 登出帳號
           </button>
         </div>

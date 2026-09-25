@@ -1,21 +1,15 @@
 // src/components/Analytics.jsx (完整功能版)
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { BarChart3, TrendingUp, TrendingDown, Target, Zap, Minus, Heart, Swords } from 'lucide-react';
+import React from 'react';
+import { Heart, Swords } from 'lucide-react';
+import { getGamesByCreatedAtQuery } from '../services/gamesService';
+import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
 
 const Analytics = ({ userId }) => {
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const q = query(collection(db, "games"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setRecords(snapshot.docs.map(doc => doc.data()));
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [userId]);
+  const { data: records, loading } = useFirestoreSubscription(getGamesByCreatedAtQuery, {
+    enabled: Boolean(userId),
+    deps: [userId],
+    mapSnapshot: (snapshot) => snapshot.docs.map((d) => d.data()),
+  });
 
   const calculateStats = () => {
     const stats = {};

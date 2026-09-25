@@ -1,7 +1,6 @@
 // src/components/AddRecord.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, query, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { createGame, getGameSuggestions } from '../services/gamesService';
 import { 
   MapPin, 
   Calendar as CalendarIcon, 
@@ -53,19 +52,12 @@ const AddRecord = ({ userId }) => {
   }, []);
 
   useEffect(() => {
+    // 歷史建議係一次性讀取（one-shot getDocs），唔係 realtime subscription
     const fetchHistory = async () => {
       try {
-        const q = query(collection(db, "games"));
-        const querySnapshot = await getDocs(q);
-        const locSet = new Set();
-        const nameSet = new Set();
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.location) locSet.add(data.location);
-          if (data.players) data.players.forEach(p => { if (p.name) nameSet.add(p.name); });
-        });
-        setHistoryLocations(Array.from(locSet).sort());
-        setHistoryPlayerNames(Array.from(nameSet).sort());
+        const { locations, playerNames } = await getGameSuggestions();
+        setHistoryLocations(locations);
+        setHistoryPlayerNames(playerNames);
       } catch (e) { console.error(e); }
     };
     fetchHistory();
@@ -127,12 +119,10 @@ const AddRecord = ({ userId }) => {
     setLoading(true);
     setModal({ isOpen: true, type: 'loading', title: '處理中', message: '正在同步戰績...' });
     try {
-      await addDoc(collection(db, "games"), {
-        userId,
+      await createGame(userId, {
         location: location.trim(),
         players: players.map(p => ({ ...p, score: parseInt(p.score) || 0 })),
         date: gameDate,
-        createdAt: serverTimestamp()
       });
       setModal({ isOpen: true, type: 'success', title: '紀錄成功！', message: '戰績已儲存。' });
       
@@ -141,7 +131,7 @@ const AddRecord = ({ userId }) => {
       setPlayers([
         { name: '', score: 0 }, { name: '', score: 0 }, { name: '', score: 0 }, { name: '', score: 0 }
       ]);
-    } catch (error) {
+    } catch {
       setModal({ isOpen: true, type: 'error', title: '失敗', message: '網絡異常。' });
     } finally { setLoading(false); }
   };

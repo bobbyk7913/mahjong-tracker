@@ -1,9 +1,7 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { auth, db } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { useAuthState } from './hooks/useAuthState';
 
 // 引入我哋整好晒嘅組件
 import Auth from './components/Auth';
@@ -14,60 +12,30 @@ import Analytics from './components/Analytics';
 // import Tools from './components/Tools';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [isApproved, setIsApproved] = useState(false);
-
-  // 監聽 Firebase 登入狀態
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-      setIsApproved(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // 監聽用戶批准狀態
-  useEffect(() => {
-    if (!user) {
-      setStatusLoading(false);
-      setIsApproved(false);
-      return undefined;
-    }
-
-    setStatusLoading(true);
-    const userRef = doc(db, 'users', user.uid);
-
-    const unsubscribe = onSnapshot(
-      userRef,
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          setIsApproved(false);
-          setStatusLoading(false);
-          return;
-        }
-
-        const data = snapshot.data();
-        setIsApproved(data?.status === 'approved');
-        setStatusLoading(false);
-      },
-      (error) => {
-        console.error('User status error:', error);
-        setIsApproved(false);
-        setStatusLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user]);
+  // 唯一 access gate：auth 狀態 + users/{uid} 批准狀態都由 useAuthState 管理
+  const { user, authLoading, approvalLoading, isApproved, approvalError } = useAuthState();
 
   // 載入中畫面
-  if (authLoading || statusLoading) {
+  if (authLoading || approvalLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  // 批准狀態 listener 出錯：唔當成未批准，顯示可恢復嘅錯誤畫面
+  if (approvalError) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-gray-50 gap-4 p-4">
+        <p className="font-black text-red-500">無法讀取用戶授權狀態</p>
+        <p className="text-sm text-gray-500 font-bold">請檢查網絡後重新整理頁面。</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-6 py-3 bg-gray-900 text-white rounded-2xl font-black text-sm"
+        >
+          重新整理
+        </button>
       </div>
     );
   }
@@ -84,7 +52,7 @@ function App() {
       ) : (
         isApproved ? (
           // 已批准：套用 Layout (Side Menu) 並根據網址顯示不同頁面
-          <Layout user={user}>
+          <Layout>
             <Routes>
               <Route path="/" element={<Dashboard userId={user.uid} />} />
               <Route path="/add" element={<AddRecord userId={user.uid} />} />
@@ -95,9 +63,9 @@ function App() {
             </Routes>
           </Layout>
         ) : (
-          // 未批准：只顯示邀請碼驗證介面
+          // 未批准：只顯示邀請碼驗證介面（approval 由 user document listener 驅動，唔再靠 callback）
           <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-            <Auth user={user} onApproved={() => setIsApproved(true)} />
+            <Auth user={user} />
           </div>
         )
       )}
