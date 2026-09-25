@@ -1,5 +1,5 @@
 // src/App.jsx
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthState } from './hooks/useAuthState';
 import { GamesDataProvider } from './contexts/GamesDataContext';
@@ -7,9 +7,11 @@ import { GamesDataProvider } from './contexts/GamesDataContext';
 // 引入我哋整好晒嘅組件
 import Auth from './components/Auth';
 import Layout from './components/Layout';
-import AddRecord from './components/AddRecord';
 import Dashboard from './components/Dashboard';
-import Analytics from './components/Analytics';
+
+// 非首屏頁面按需載入，減少 initial bundle
+const AddRecord = lazy(() => import('./components/AddRecord'));
+const Analytics = lazy(() => import('./components/Analytics'));
 // import Tools from './components/Tools';
 
 function App() {
@@ -55,14 +57,20 @@ function App() {
           // 已批准：套用 Layout (Side Menu) 並根據網址顯示不同頁面
           <GamesDataProvider userId={user.uid}>
             <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard userId={user.uid} />} />
-                <Route path="/add" element={<AddRecord userId={user.uid} />} />
-                <Route path="/analytics" element={<Analytics />} />
-                {/* <Route path="/tools" element={<Tools userId={user.uid} />} /> */}
-                {/* 如果網址亂打，自動跳返去首頁 */}
-                <Route path="*" element={<Navigate to="/" />} />
-              </Routes>
+              <Suspense fallback={
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+                </div>
+              }>
+                <Routes>
+                  <Route path="/" element={<Dashboard userId={user.uid} />} />
+                  <Route path="/add" element={<AddRecord userId={user.uid} />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  {/* <Route path="/tools" element={<Tools userId={user.uid} />} /> */}
+                  {/* 如果網址亂打，自動跳返去首頁 */}
+                  <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
+              </Suspense>
             </Layout>
           </GamesDataProvider>
         ) : (

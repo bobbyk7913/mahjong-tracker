@@ -2,7 +2,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -20,8 +19,12 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-// 初始化 Analytics（無需 export，SDK 會自動上報）
-getAnalytics(app);
+// Analytics 係非必要首屏功能，用 dynamic import 按需載入，避免加粗 initial bundle。
+if (typeof window !== 'undefined') {
+  import('firebase/analytics')
+    .then(({ getAnalytics }) => getAnalytics(app))
+    .catch((error) => console.debug('Firebase Analytics unavailable:', error));
+}
 
 // export Auth and Firestore for other Component
 export const auth = getAuth(app);
