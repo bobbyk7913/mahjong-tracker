@@ -1,23 +1,14 @@
 // src/components/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { History, TrendingUp, TrendingDown, Calendar, MapPin, Trophy, Trash2, Loader2 } from 'lucide-react';
-import { getGamesQuery, deleteGame } from '../services/gamesService';
-import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
+import { deleteGame } from '../services/gamesService';
+import { useGamesData } from '../hooks/useGamesData';
 import { useStatusModal } from '../hooks/useStatusModal';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 import StatusModal from './StatusModal';
 
 const Dashboard = ({ userId }) => {
-  // realtime 訂閱由 hook 管理；保留首次批准後 rules 同步 race 嘅一次性重試
-  const { data: games, loading, error: subscriptionError, retry } = useFirestoreSubscription(getGamesQuery, {
-    enabled: Boolean(userId),
-    deps: [userId],
-    retryConfig: {
-      maxAttempts: 1,
-      initialDelayMs: 700,
-      retryableCodes: ['permission-denied', 'unavailable'],
-    },
-  });
+  const { data: games, loading, error: subscriptionError, retry } = useGamesData();
   const [selectedYear, setSelectedYear] = useState('ALL'); 
   const modal = useStatusModal();
 

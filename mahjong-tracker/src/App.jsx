@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthState } from './hooks/useAuthState';
+import { GamesDataProvider } from './contexts/GamesDataContext';
 
 // 引入我哋整好晒嘅組件
 import Auth from './components/Auth';
@@ -52,16 +53,18 @@ function App() {
       ) : (
         isApproved ? (
           // 已批准：套用 Layout (Side Menu) 並根據網址顯示不同頁面
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard userId={user.uid} />} />
-              <Route path="/add" element={<AddRecord userId={user.uid} />} />
-              <Route path="/analytics" element={<Analytics userId={user.uid} />} />
-              {/* <Route path="/tools" element={<Tools userId={user.uid} />} /> */}
-              {/* 如果網址亂打，自動跳返去首頁 */}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Layout>
+          <GamesDataProvider userId={user.uid}>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard userId={user.uid} />} />
+                <Route path="/add" element={<AddRecord userId={user.uid} />} />
+                <Route path="/analytics" element={<Analytics />} />
+                {/* <Route path="/tools" element={<Tools userId={user.uid} />} /> */}
+                {/* 如果網址亂打，自動跳返去首頁 */}
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+            </Layout>
+          </GamesDataProvider>
         ) : (
           // 未批准：只顯示邀請碼驗證介面（approval 由 user document listener 驅動，唔再靠 callback）
           <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">

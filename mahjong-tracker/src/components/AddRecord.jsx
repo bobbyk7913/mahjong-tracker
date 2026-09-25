@@ -1,6 +1,7 @@
 // src/components/AddRecord.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { createGame, getGameSuggestions } from '../services/gamesService';
+import { createGame } from '../services/gamesService';
+import { useGamesData } from '../hooks/useGamesData';
 import { useStatusModal } from '../hooks/useStatusModal';
 import { 
   MapPin, 
@@ -41,8 +42,7 @@ const AddRecord = ({ userId }) => {
   const [viewDate, setViewDate] = useState(new Date()); 
 
   const modal = useStatusModal();
-  const [historyLocations, setHistoryLocations] = useState([]);
-  const [historyPlayerNames, setHistoryPlayerNames] = useState([]);
+  const { suggestions } = useGamesData();
   const [showLocSuggestions, setShowLocSuggestions] = useState(false);
   const [activePlayerSuggestIdx, setActivePlayerSuggestIdx] = useState(null);
 
@@ -50,18 +50,6 @@ const AddRecord = ({ userId }) => {
     const handleResize = () => setKeyboardVisible(window.innerHeight < 600);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    // 歷史建議係一次性讀取（one-shot getDocs），唔係 realtime subscription
-    const fetchHistory = async () => {
-      try {
-        const { locations, playerNames } = await getGameSuggestions();
-        setHistoryLocations(locations);
-        setHistoryPlayerNames(playerNames);
-      } catch (e) { console.error(e); }
-    };
-    fetchHistory();
   }, []);
 
   const calendarDays = useMemo(() => {
@@ -156,9 +144,9 @@ const AddRecord = ({ userId }) => {
                 onBlur={() => setTimeout(() => setShowLocSuggestions(false), 300)}
               />
             </div>
-            {showLocSuggestions && historyLocations.length > 0 && (
+            {showLocSuggestions && suggestions.locations.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-white/95 backdrop-blur-md border border-gray-100 rounded-2xl shadow-2xl max-h-40 overflow-y-auto">
-                {historyLocations.filter(loc => loc.toLowerCase().includes(location.toLowerCase())).map((loc, i) => (
+                {suggestions.locations.filter(loc => loc.toLowerCase().includes(location.toLowerCase())).map((loc, i) => (
                   <div key={i} className="px-5 py-3 hover:bg-green-50 border-b border-gray-50 last:border-none font-bold text-gray-600 flex items-center gap-2 cursor-pointer" onMouseDown={() => setLocation(loc)}>
                     <span className="opacity-30">📍</span> {loc}
                   </div>
@@ -214,9 +202,9 @@ const AddRecord = ({ userId }) => {
                     onBlur={() => setTimeout(() => setActivePlayerSuggestIdx(null), 300)}
                   />
                 </div>
-                {activePlayerSuggestIdx === index && historyPlayerNames.length > 0 && (
+                {activePlayerSuggestIdx === index && suggestions.playerNames.length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-white/95 backdrop-blur-md border border-gray-100 rounded-xl shadow-2xl max-h-32 overflow-y-auto">
-                    {historyPlayerNames.filter(n => n.toLowerCase().includes(player.name.toLowerCase())).map((name, i) => (
+                    {suggestions.playerNames.filter(n => n.toLowerCase().includes(player.name.toLowerCase())).map((name, i) => (
                       <div key={i} className="px-4 py-2 hover:bg-green-50 border-b border-gray-50 font-bold text-gray-600 flex items-center gap-2 text-sm cursor-pointer" onMouseDown={() => handlePlayerChange(index, 'name', name)}>
                         <span className="opacity-30 text-xs">👤</span> {name}
                       </div>

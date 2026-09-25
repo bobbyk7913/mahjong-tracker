@@ -1,69 +1,14 @@
 // src/components/Analytics.jsx (完整功能版)
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Heart, Swords } from 'lucide-react';
-import { getGamesByCreatedAtQuery } from '../services/gamesService';
-import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
+import { useGamesData } from '../hooks/useGamesData';
+import { calculatePlayerStats } from '../utils/analytics';
 
-const Analytics = ({ userId }) => {
-  const { data: records, loading } = useFirestoreSubscription(getGamesByCreatedAtQuery, {
-    enabled: Boolean(userId),
-    deps: [userId],
-    mapSnapshot: (snapshot) => snapshot.docs.map((d) => d.data()),
-  });
-
-  const calculateStats = () => {
-    const stats = {};
-    const synergy = {}; // 用嚟計拍檔關係
-
-    // 1. 基本數據計算
-    records.forEach((game) => {
-      game.players.forEach(p => {
-        if (!stats[p.name]) {
-          stats[p.name] = { total: 0, games: 0, wins: 0, maxWin: 0, maxLoss: 0, recentScores: [] };
-        }
-        const ps = stats[p.name];
-        ps.total += p.score;
-        ps.games += 1;
-        if (p.score > 0) ps.wins += 1;
-        if (p.score > ps.maxWin) ps.maxWin = p.score;
-        if (p.score < ps.maxLoss) ps.maxLoss = p.score;
-        if (ps.recentScores.length < 3) ps.recentScores.push(p.score);
-      });
-
-      // 2. 拍檔關係計算 (假設總分最高嗰位係「你」，或者可以用最常出現嗰位)
-      // 呢度邏輯：對每一對組合進行分析
-      game.players.forEach(p1 => {
-        if (!synergy[p1.name]) synergy[p1.name] = {};
-        game.players.forEach(p2 => {
-          if (p1.name === p2.name) return;
-          if (!synergy[p1.name][p2.name]) synergy[p1.name][p2.name] = { totalWith: 0, gamesWith: 0 };
-          synergy[p1.name][p2.name].totalWith += p1.score;
-          synergy[p1.name][p2.name].gamesWith += 1;
-        });
-      });
-    });
-
-    const sortedPlayers = Object.entries(stats).sort((a, b) => b[1].total - a[1].total);
-    
-    // 搵出每個玩家嘅最佳/最差拍檔
-    const playerRelations = {};
-    Object.keys(synergy).forEach(me => {
-      const relations = Object.entries(synergy[me])
-        .map(([partner, data]) => ({ partner, avg: data.totalWith / data.gamesWith }))
-        .sort((a, b) => b.avg - a.avg);
-      
-      playerRelations[me] = {
-        best: relations[0],
-        worst: relations[relations.length - 1]
-      };
-    });
-
-    return { sortedPlayers, playerRelations };
-  };
+const Analytics = () => {
+  const { data: records, loading } = useGamesData();
+  const { sortedPlayers, playerRelations } = useMemo(() => calculatePlayerStats(records), [records]);
 
   if (loading) return <div className="p-20 text-center animate-pulse font-black text-gray-400">大數據運算中...</div>;
-
-  const { sortedPlayers, playerRelations } = calculateStats();
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-24 px-2">
