@@ -1,6 +1,7 @@
 // src/components/AddRecord.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { createGame, getGameSuggestions } from '../services/gamesService';
+import { useStatusModal } from '../hooks/useStatusModal';
 import { 
   MapPin, 
   Calendar as CalendarIcon, 
@@ -39,7 +40,7 @@ const AddRecord = ({ userId }) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [viewDate, setViewDate] = useState(new Date()); 
 
-  const [modal, setModal] = useState({ isOpen: false, type: 'success', title: '', message: '' });
+  const modal = useStatusModal();
   const [historyLocations, setHistoryLocations] = useState([]);
   const [historyPlayerNames, setHistoryPlayerNames] = useState([]);
   const [showLocSuggestions, setShowLocSuggestions] = useState(false);
@@ -117,14 +118,14 @@ const AddRecord = ({ userId }) => {
     e.preventDefault();
     if (!isReadyToSave) return;
     setLoading(true);
-    setModal({ isOpen: true, type: 'loading', title: '處理中', message: '正在同步戰績...' });
+    modal.showLoading('處理中', '正在同步戰績...');
     try {
       await createGame(userId, {
         location: location.trim(),
         players: players.map(p => ({ ...p, score: parseInt(p.score) || 0 })),
         date: gameDate,
       });
-      setModal({ isOpen: true, type: 'success', title: '紀錄成功！', message: '戰績已儲存。' });
+      modal.showSuccess('紀錄成功！', '戰績已儲存。');
       
       // 💡 成功後重設為 4 位空白玩家
       setLocation('');
@@ -132,7 +133,7 @@ const AddRecord = ({ userId }) => {
         { name: '', score: 0 }, { name: '', score: 0 }, { name: '', score: 0 }, { name: '', score: 0 }
       ]);
     } catch {
-      setModal({ isOpen: true, type: 'error', title: '失敗', message: '網絡異常。' });
+      modal.showError('失敗', '網絡異常。');
     } finally { setLoading(false); }
   };
 
@@ -311,7 +312,7 @@ const AddRecord = ({ userId }) => {
         </div>
       )}
 
-      <StatusModal {...modal} onClose={() => setModal({ ...modal, isOpen: false })} />
+      <StatusModal {...modal.props} />
     </div>
   );
 };

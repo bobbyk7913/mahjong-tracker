@@ -4,29 +4,25 @@ import { Loader2, KeyRound, LogOut, ShieldCheck, UserCircle2 } from 'lucide-reac
 import { MASTER_INVITE_CODE, LOCAL_STORAGE_KEYS } from '../constants';
 import { signInWithGoogle, signOutUser, refreshCurrentUserToken } from '../services/authService';
 import { approveUser } from '../services/usersService';
+import { useStatusModal } from '../hooks/useStatusModal';
 import StatusModal from './StatusModal';
 
 const Auth = ({ user }) => {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState({ isOpen: false, type: 'success', title: '', message: '' });
+  const modal = useStatusModal();
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    setModal({ isOpen: true, type: 'loading', title: '驗證中', message: '正在同步 Google 帳號...' });
+    modal.showLoading('驗證中', '正在同步 Google 帳號...');
 
     try {
       await signInWithGoogle();
-      setModal({ isOpen: false });
+      modal.close();
     } catch (error) {
       console.error("Google Auth Error:", error);
       if (error.code !== 'auth/popup-closed-by-user') {
-        setModal({
-          isOpen: true,
-          type: 'error',
-          title: '登入失敗',
-          message: '無法完成 Google 驗證，請確保網域已授權且網絡正常。'
-        });
+        modal.showError('登入失敗', '無法完成 Google 驗證，請確保網域已授權且網絡正常。');
       }
     } finally {
       setLoading(false);
@@ -37,26 +33,16 @@ const Auth = ({ user }) => {
     e.preventDefault();
 
     if (!user) {
-      setModal({
-        isOpen: true,
-        type: 'error',
-        title: '未登入',
-        message: '請先用 Google 登入後再輸入邀請碼。'
-      });
+      modal.showError('未登入', '請先用 Google 登入後再輸入邀請碼。');
       return;
     }
 
     setLoading(true);
-    setModal({ isOpen: true, type: 'loading', title: '驗證中', message: '正在檢查邀請碼...' });
+    modal.showLoading('驗證中', '正在檢查邀請碼...');
 
     try {
       if (inviteCode.trim() !== MASTER_INVITE_CODE) {
-        setModal({
-          isOpen: true,
-          type: 'error',
-          title: '邀請碼錯誤',
-          message: '暗號不正確，請重新輸入。'
-        });
+        modal.showError('邀請碼錯誤', '暗號不正確，請重新輸入。');
         return;
       }
 
@@ -71,16 +57,11 @@ const Auth = ({ user }) => {
 
       // 清空輸入框
       setInviteCode('');
-      setModal({ isOpen: false });
+      modal.close();
       
     } catch (error) {
       console.error('Invite code approval error:', error);
-      setModal({
-        isOpen: true,
-        type: 'error',
-        title: '驗證失敗',
-        message: '無法完成邀請碼驗證，請稍後再試。'
-      });
+      modal.showError('驗證失敗', '無法完成邀請碼驗證，請稍後再試。');
     } finally {
       setLoading(false);
     }
@@ -90,7 +71,7 @@ const Auth = ({ user }) => {
     try {
       await signOutUser();
       setInviteCode('');
-      setModal({ isOpen: false, type: 'success', title: '', message: '' });
+      modal.close();
     } catch (error) {
       console.error('Sign out error:', error);
     }
@@ -173,7 +154,7 @@ const Auth = ({ user }) => {
         )}
       </div>
 
-      <StatusModal {...modal} onClose={() => setModal({ ...modal, isOpen: false })} />
+      <StatusModal {...modal.props} />
     </div>
   );
 };

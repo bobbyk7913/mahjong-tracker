@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { History, TrendingUp, TrendingDown, Calendar, MapPin, Trophy, Trash2, Loader2 } from 'lucide-react';
 import { getGamesQuery, deleteGame } from '../services/gamesService';
 import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
+import { useStatusModal } from '../hooks/useStatusModal';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 import StatusModal from './StatusModal';
 
@@ -18,9 +19,7 @@ const Dashboard = ({ userId }) => {
     },
   });
   const [selectedYear, setSelectedYear] = useState('ALL'); 
-  const [modal, setModal] = useState({ 
-    isOpen: false, type: 'loading', title: '', message: '', onConfirm: null 
-  });
+  const modal = useStatusModal();
 
   // 💡 核心修正 1：檢查是否是剛驗證完過來的新用戶，如果是就彈出成功 Modal
   useEffect(() => {
@@ -29,19 +28,10 @@ const Dashboard = ({ userId }) => {
       // 移除標記，確保下一次手動重新整理網頁時唔會再重複彈出
       localStorage.removeItem(LOCAL_STORAGE_KEYS.SHOW_APPROVED_WELCOME);
       
-      // 彈出成功 Modal（一次過 mount side-effect，符合預期）
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setModal({
-        isOpen: true,
-        type: 'success',
-        title: '驗證成功',
-        message: '歡迎加入！你已成為正式系統用戶，雀神主系統已成功解鎖。',
-        onConfirm: () => {
-          setModal({ isOpen: false, type: 'loading', title: '', message: '', onConfirm: null });
-        }
-      });
+      // 彈出成功 Modal
+      modal.showSuccess('驗證成功', '歡迎加入！你已成為正式系統用戶，雀神主系統已成功解鎖。');
     }
-  }, []); // 只在 Dashboard 第一次掛載時跑一次
+  }, [modal]); // 只在 Dashboard 第一次掛載時跑一次
 
   // 1. 提取所有年份
   const availableYears = useMemo(() => {
@@ -77,20 +67,16 @@ const Dashboard = ({ userId }) => {
 
   // 處理刪除
   const handleDeleteRequest = (gameId, date) => {
-    setModal({
-      isOpen: true, type: 'error', title: '確定刪除？',
-      message: `確定要刪除 ${date} 的戰績嗎？`,
-      onConfirm: () => performDelete(gameId)
-    });
+    modal.confirm('確定刪除？', `確定要刪除 ${date} 的戰績嗎？`, () => performDelete(gameId));
   };
 
   const performDelete = async (gameId) => {
-    setModal({ isOpen: true, type: 'loading', title: '處理中', message: '正在抹除紀錄...' });
+    modal.showLoading('處理中', '正在抹除紀錄...');
     try {
       await deleteGame(gameId);
-      setModal({ isOpen: true, type: 'success', title: '刪除成功', message: '戰績已移除。' });
+      modal.showSuccess('刪除成功', '戰績已移除。');
     } catch {
-      setModal({ isOpen: true, type: 'error', title: '失敗', message: '網絡異常。' });
+      modal.showError('失敗', '網絡異常。');
     }
   };
 
@@ -232,7 +218,7 @@ const Dashboard = ({ userId }) => {
         </div>
       </section>
 
-      <StatusModal {...modal} onClose={() => setModal({ ...modal, isOpen: false })} />
+      <StatusModal {...modal.props} />
     </div>
   );
 };

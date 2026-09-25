@@ -3,10 +3,11 @@ import { Wand2, Users, MapPin, AlertTriangle, FileUp, Database, Loader2 } from '
 import * as XLSX from 'xlsx';
 import { getAllGamesQuery, batchRename } from '../services/gamesService';
 import { useFirestoreSubscription } from '../hooks/useFirestoreSubscription';
+import { useStatusModal } from '../hooks/useStatusModal';
 import StatusModal from './StatusModal';
 
 const Tools = () => {
-  const [modal, setModal] = useState({ isOpen: false, type: 'loading', title: '', message: '' });
+  const modal = useStatusModal();
 
   // 1. 實時監聽所有戰績，用嚟整 Dropdown List
   const { data: games } = useFirestoreSubscription(getAllGamesQuery, {
@@ -40,23 +41,23 @@ const Tools = () => {
     const newVal = type === 'PLAYER' ? targetNames.newPlayer : targetNames.newLoc;
 
     if (!oldVal || !newVal) {
-      setModal({ isOpen: true, type: 'error', title: '錯誤', message: '請選擇舊名稱並輸入新名稱' });
+      modal.showError('錯誤', '請選擇舊名稱並輸入新名稱');
       return;
     }
 
-    setModal({ isOpen: true, type: 'loading', title: '處理中', message: '正在更新全體紀錄...' });
+    modal.showLoading('處理中', '正在更新全體紀錄...');
 
     try {
       const count = await batchRename({ type, oldValue: oldVal, newValue: newVal });
 
       if (count > 0) {
-        setModal({ isOpen: true, type: 'success', title: '更新完成', message: `已成功修改 ${count} 條紀錄！` });
+        modal.showSuccess('更新完成', `已成功修改 ${count} 條紀錄！`);
         setTargetNames({ ...targetNames, [type === 'PLAYER' ? 'newPlayer' : 'newLoc']: '' });
       } else {
-        setModal({ isOpen: true, type: 'error', title: '無變更', message: '搵唔到需要更新嘅紀錄。' });
+        modal.showError('無變更', '搵唔到需要更新嘅紀錄。');
       }
     } catch {
-      setModal({ isOpen: true, type: 'error', title: '失敗', message: '更新失敗' });
+      modal.showError('失敗', '更新失敗');
     }
   };
 
@@ -140,7 +141,7 @@ const Tools = () => {
         </div>
       </section>
 
-      <StatusModal {...modal} onClose={() => setModal({ ...modal, isOpen: false })} />
+      <StatusModal {...modal.props} />
     </div>
   );
 };
